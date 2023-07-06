@@ -171,34 +171,45 @@ func (c *MDMClient) Connect() error {
 		Status: "Idle",
 	}
 	client := &http.Client{}
+	log.Println("The first connect() calling will send Idle status of the mocked device")
 	return c.connect(client, req)
 }
 
 func httpRequestBytes(client *http.Client, req *http.Request) (bytes []byte, res *http.Response, err error) {
+	log.Println("send request to MDM Server")
 	res, err = client.Do(req)
 	if err != nil {
 		return
 	}
 	defer res.Body.Close()
+	log.Println("read response")
 	bytes, err = ioutil.ReadAll(res.Body)
 	return
 }
 
 func (c *MDMClient) connect(client *http.Client, connReq interface{}) error {
+	log.Println("call connect(), mdm.Connect webhook request")
+	log.Println("call connect() as mdm.Connect webhook in loop, until all queued commands on MDM Server were all consumed")
+	log.Printf("connReq: %s", connReq)
+
 	if !c.enrolled() {
 		return errors.New("device not enrolled")
 	}
 
+	log.Println("plist.Marshal to wrap the request to plist")
 	plistBytes, err := plist.Marshal(connReq)
+	log.Printf("plistBytes %s", plistBytes)
 	if err != nil {
 		return err
 	}
 
+	log.Println("sign the plist")
 	mdmSig, err := c.mdmP7Sign(plistBytes)
 	if err != nil {
 		return err
 	}
 
+	log.Println("http.NewRequest to MDM Server to send webhook information")
 	req, err := http.NewRequest("PUT", c.MDMPayload.ServerURL, bytes.NewReader(plistBytes))
 	if err != nil {
 		return err
@@ -215,16 +226,23 @@ func (c *MDMClient) connect(client *http.Client, connReq interface{}) error {
 	}
 
 	if len(respBytes) == 0 {
+		log.Println("No command or other information from the response of webhook request from MDM Server. End the loop")
 		return nil
 	}
 
 	resp := &ConnectResponse{}
 	err = plist.Unmarshal(respBytes, &resp)
+	log.Printf("respBytes %s", respBytes)
+	log.Printf("plist.Unmarshal to unfold the response: %s", resp)
 	if err != nil {
 		return err
 	}
 
+	log.Println("handle the command(if exists) which responded from webhook request")
 	nextConnReq, err := c.handleMDMCommand(resp.Command.RequestType, resp.CommandUUID, respBytes)
+	log.Printf("resp.Command.RequestType: %s", resp.Command.RequestType)
+	log.Printf("resp.CommandUUID: %s", resp.CommandUUID)
+	log.Printf("nextConnReq: %s", nextConnReq)
 	if err != nil {
 		log.Println(err)
 		nextConnReq = &ConnectRequest{

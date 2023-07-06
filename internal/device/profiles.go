@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 
 	"github.com/groob/plist"
@@ -18,6 +19,7 @@ type ProfileStore struct {
 }
 
 func NewProfileStore(id string, db *bolt.DB) *ProfileStore {
+	log.Println("call NewProfileStore")
 	return &ProfileStore{ID: id, DB: db}
 }
 
@@ -50,6 +52,7 @@ func (ps *ProfileStore) persistProfile(pb []byte, profileID string) error {
 }
 
 func (ps *ProfileStore) removeProfile(profileID string) error {
+	log.Printf("call removeProfile, profileID %s", profileID)
 	key := fmt.Sprintf("%s_%s", ps.ID, profileID)
 	return ps.DB.Update(func(tx *bolt.Tx) error {
 		return BucketPutOrDelete(tx, "profiles", key, nil)
@@ -83,6 +86,7 @@ func (ps *ProfileStore) removePayloadRefString(profileID string, pld *cfgprofile
 }
 
 func (ps *ProfileStore) ListUUIDs() (uuids []string, err error) {
+	log.Println("call ListUUIDS")
 	err = ps.DB.View(func(tx *bolt.Tx) error {
 		uuids = BucketGetKeysWithPrefix(tx, "profiles", ps.ID+"_", true)
 		return nil
@@ -91,6 +95,7 @@ func (ps *ProfileStore) ListUUIDs() (uuids []string, err error) {
 }
 
 func (device *Device) SystemProfileStore() *ProfileStore {
+	log.Println("call SystemProfileStore")
 	if device.sysProfileStore == nil {
 		device.sysProfileStore = NewProfileStore(device.UDID, device.boltDB)
 	}
@@ -113,8 +118,11 @@ type payloadAndResult struct {
 }
 
 func findpayloadAndResultByUUID(plds []*payloadAndResult, uuid string) *payloadAndResult {
+	log.Printf("call findpayloadAndResultByUUID, plds.len %s, uuid %s", len(plds), uuid)
 	for _, v := range plds {
 		if v.CommonPayload != nil && v.CommonPayload.PayloadUUID == uuid {
+			log.Printf("v.CommonPayload.PayloadType %s", v.CommonPayload.PayloadType)
+			log.Printf("v.CommonPayload.PayloadUUID %s", v.CommonPayload.PayloadUUID)
 			return v
 		}
 	}
@@ -122,6 +130,7 @@ func findpayloadAndResultByUUID(plds []*payloadAndResult, uuid string) *payloadA
 }
 
 func (device *Device) ValidateProfileInstall(p *cfgprofiles.Profile, fromMDM bool) error {
+	log.Printf("call ValidateProfileInstall")
 	mdmPlds := p.MDMPayloads()
 	if len(mdmPlds) >= 1 {
 		if len(mdmPlds) > 1 {
@@ -150,6 +159,7 @@ func (device *Device) ValidateProfileInstall(p *cfgprofiles.Profile, fromMDM boo
 }
 
 func classifyAndSortProfilePayloads(p *cfgprofiles.Profile, ascending bool) []*payloadAndResult {
+	log.Println("call classifyAndSortProfilePayloads")
 	orderedPayloads := make([]*payloadAndResult, len(p.PayloadContent))
 	for i, plc := range p.PayloadContent {
 		switch pl := plc.Payload.(type) {
@@ -164,6 +174,12 @@ func classifyAndSortProfilePayloads(p *cfgprofiles.Profile, ascending bool) []*p
 				CommonPayload:        &pl.Payload,
 				Payload:              pl,
 				PayloadRequiresFlags: PayloadRequiresNetwork | PayloadRequiresIdentities,
+			}
+		case *cfgprofiles.WebClipPayload:
+			orderedPayloads[i] = &payloadAndResult{
+				CommonPayload:        &pl.Payload,
+				Payload:              pl,
+				PayloadRequiresFlags: PayloadRequiresIdentities,
 			}
 		default:
 			orderedPayloads[i] = &payloadAndResult{
@@ -186,19 +202,24 @@ func classifyAndSortProfilePayloads(p *cfgprofiles.Profile, ascending bool) []*p
 }
 
 func (device *Device) InstallProfile(pb []byte) error {
+	log.Println("Install Profile manually")
 	return device.installProfile(pb, false)
 }
 
 func (device *Device) installProfileFromMDM(pb []byte) error {
+	log.Println("Install Profile when get mdm command")
+	log.Println("call installProfileFromMDM")
 	return device.installProfile(pb, true)
 }
 
 func (device *Device) installProfile(pb []byte, fromMDM bool) error {
+	log.Println("call installProfile")
 	if len(pb) == 0 {
 		return errors.New("empty profile")
 	}
 	p := &cfgprofiles.Profile{}
 	err := plist.Unmarshal(pb, p)
+	log.Printf("p.PayloadType %s", p.PayloadType)
 	if err != nil {
 		return err
 	}
@@ -215,14 +236,17 @@ func (device *Device) installProfile(pb []byte, fromMDM bool) error {
 		if uuid == p.PayloadIdentifier {
 			matched = uuid
 		}
+		log.Printf("uuid %s matched p.PayloadIdentifier %s: matched %s", uuid, p.PayloadIdentifier, matched)
 	}
 	if matched != "" {
 		// remove the existing installed profile
+		log.Printf("remove the existing installed profile, matched: %s", matched)
 		device.RemoveProfile(matched)
 	}
 
 	orderedPayloads := classifyAndSortProfilePayloads(p, false)
 
+	log.Println("process and install payloads")
 	// process and install payloads
 	// TODO: to process profile roll-backs/uninstalls
 	for _, pr := range orderedPayloads {
@@ -251,12 +275,31 @@ func (device *Device) installProfile(pb []byte, fromMDM bool) error {
 			if err != nil {
 				return err
 			}
+		case *cfgprofiles.WebClipPayload:
+			log.Println("case WebClipPayload")
+			pr.payloadAndResultRef = findpayloadAndResultByUUID(orderedPayloads, pl.PayloadUUID)
+			log.Printf("pr.payloadAndResultRef %s", pr.payloadAndResultRef)
+			log.Printf("pl.PayloadUUID %s", pl.PayloadUUID)
+
+			if pr.payloadAndResultRef == nil {
+				return fmt.Errorf("could not find payload UUID %s", pl.PayloadUUID)
+			}
+
+			err = device.installWebClipPayload(pl, p.PayloadIdentifier)
+			if err != nil {
+				return err
+			}
 		default:
 			fmt.Printf("unknown payload type %s uuid %s not processed\n", pr.CommonPayload.PayloadType, pr.CommonPayload.PayloadUUID)
 		}
 	}
 
 	return device.SystemProfileStore().persistProfile(pb, p.PayloadIdentifier)
+}
+
+func (device *Device) installWebClipPayload(webClipPayload *cfgprofiles.WebClipPayload, profileID string) error {
+	log.Println("call installWebClipPayload (do nothing)")
+	return nil
 }
 
 func (device *Device) installMDMPayload(mdmPayload *cfgprofiles.MDMPayload, profileID string) error {
@@ -327,6 +370,7 @@ func (device *Device) installSCEPPayload(profileID string, scepPayload *cfgprofi
 }
 
 func (device *Device) RemoveProfile(profileID string) error {
+	log.Println("Remove Profile")
 	p, err := device.SystemProfileStore().Load(profileID)
 	if err != nil {
 		return err
@@ -344,6 +388,12 @@ func (device *Device) RemoveProfile(profileID string) error {
 			err = device.removeMDMPayload()
 			if err != nil {
 				fmt.Println(err)
+			}
+		case *cfgprofiles.WebClipPayload:
+			log.Println("Remove Webclip")
+			err := device.removeWebClipPayload()
+			if err != nil {
+				return err
 			}
 		default:
 			fmt.Printf("unknown payload type %s uuid %s not processed\n", pr.CommonPayload.PayloadType, pr.CommonPayload.PayloadUUID)
@@ -407,5 +457,10 @@ func (device *Device) removeMDMPayload() error {
 		return err
 	}
 	device.Save()
+	return nil
+}
+
+func (device *Device) removeWebClipPayload() error {
+	log.Println("do nothing")
 	return nil
 }
