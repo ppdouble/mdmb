@@ -178,17 +178,26 @@ func (c *MDMClient) TokenUpdate(addl string, udid string) error {
 	pushMagic := strings.ToUpper(uuid.NewString())
 
 	log.Println("TokenUpdate")
+	log.Printf("udid %s\n", udid)
+	//base64UDID := base64.StdEncoding.EncodeToString([]byte(udid))
+	//log.Printf("base64 udid %s\n", base64UDID)
 	budid := []byte(udid)
-	ebudid := make([]byte, hex.EncodedLen(len(budid)))
-	hex.Encode(ebudid, budid)
+	log.Printf("budid %s\n", budid)
+	//ebudid := make([]byte, hex.EncodedLen(len(budid)))
+	//hex.Encode(ebudid, budid)
+	//log.Printf("hex.EncodeToString(ebudid), wrong, double encoding: %s\n", hex.EncodeToString(ebudid))
+	//log.Printf("ebudid, right: %s\n", ebudid)
+	//log.Printf("hex.EncodeToString(ebudid), wrong, double encoding: %s\n", hex.EncodeToString(ebudid))
+	log.Printf("hex.EncodeToString(budid): %s\n", hex.EncodeToString(budid))
+
+
 	tu := &TokenUpdateRequest{
 		MessageType: "TokenUpdate",
 		PushMagic:   pushMagic,
-		Token:       ebudid,
+		Token:       budid,
 		Topic:       c.MDMPayload.Topic,
 		UDID:        c.Device.UDID,
 	}
-
 	return c.checkinRequest(tu)
 }
 

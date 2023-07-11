@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -173,13 +174,27 @@ func mockAPNSHandler() http.Handler {
 			dbPath = "mdmb.db"
 		)
 
-		devicetoken := mux.Vars(r)["devicetoken"]
-		fmt.Printf("devicetoken = %s\n", devicetoken)
-		push_notification_id := strings.ToUpper(uuid.NewString())
-		apnsRes := &ApnsResInfo{
-			Status: "success",
+		deviceTokenHex := mux.Vars(r)["devicetoken"]
+		//deviceTokenByte := []byte(deviceTokenHex)
+		//deviceToken := make([]byte, len(deviceTokenByte))
+		//hex.Decode(deviceToken,[]byte(deviceTokenHex))
+		fmt.Printf("devicetokenHex = %s\n", deviceTokenHex)
+		//fmt.Printf("devicetoken = %s\n", deviceToken)
+		deviceToken, _:=hex.DecodeString(deviceTokenHex)
+		deviceTokenStr := fmt.Sprintf("%s", deviceToken)
+		fmt.Printf("devicetokenstr = %s\n", deviceTokenStr)
+
+
+
+		push_notification_id := r.Header.Get("apns-id")
+		fmt.Printf("udidfrommicromdm header: apns-id:,  = %s\n", push_notification_id)
+		if "" == strings.TrimSpace(push_notification_id) {
+			push_notification_id = strings.ToUpper(uuid.NewString())
+			fmt.Printf("create response push_notification_id: apns-id:,  = %s\n", push_notification_id)
 		}
-		// TODO mdm.Connect
+
+		// TODO Query the device ID according to devicetoken given by micromdm
+
 		db, err := bolt.Open(dbPath, 0644, nil)
 		if err != nil {
 			fmt.Errorf("%s", err)
@@ -192,25 +207,25 @@ func mockAPNSHandler() http.Handler {
 
 		rctx := RunContext{
 			DB: db,
-			UUIDs: []string{devicetoken},
+			UUIDs: []string{deviceTokenStr},
 		}
-		fmt.Println("---")
-		fmt.Printf("%s", rctx.UUIDs[0])
-		rctx.UUIDs[0] = "ddd"
-		fmt.Println("====")
-		fmt.Printf("%s", rctx.UUIDs[0])
-		fmt.Println("******")
+		fmt.Printf("rctx.UUIDs[0] %s", rctx.UUIDs[0])
+
+		// TODO mdm.Connect
 
 		devicesConnect(rctx)
 
-		// TODO Query the device ID according to devicetoken given by micromdm
+		// TODO response apns
+		apnsRes := &ApnsResInfo{
+			Status: "success",
+		}
+
 		w.Header().Set("apns-id", push_notification_id)
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
-		fmt.Printf("%s - version %s\n", apnsRes, apnsRes.Status)
 		enc.Encode(apnsRes)
-		fmt.Printf("%s - version %s\n", apnsRes, apnsRes.Status)
+		fmt.Printf("%s - apns status %s\n", apnsRes, apnsRes.Status)
 	})
 }
 
