@@ -245,7 +245,8 @@ func devicesTokenUpdate(name string, args []string, rctx RunContext, usage func(
 			continue
 		}
 
-		err = client.TokenUpdate(*number)
+		err = client.TokenUpdate(*number, u)
+		log.Printf("client.TokenUpdate(%s)\n", number)
 		if err != nil {
 			log.Println(err)
 		}

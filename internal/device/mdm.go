@@ -3,17 +3,21 @@ package device
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/groob/plist"
 	"go.mozilla.org/pkcs7"
 )
 
 func (c *MDMClient) authenticate() error {
+	log.Println("authenticate")
 	ar := &AuthenticationRequest{
 		DeviceName:  c.Device.ComputerName,
 		MessageType: "Authenticate",
@@ -145,14 +149,46 @@ func (c *MDMClient) checkinRequest(i interface{}) error {
 	return nil
 }
 
-func (c *MDMClient) TokenUpdate(addl string) error {
+//func (c *MDMClient) TokenUpdate(addl string) error {
+//	log.Println("TokenUpdate")
+//	tu := &TokenUpdateRequest{
+//		MessageType: "TokenUpdate",
+//		PushMagic:   "fakePushMagic" + addl,
+//		Token:       []byte("fakeToken" + addl),
+//		Topic:       c.MDMPayload.Topic,
+//		UDID:        c.Device.UDID,
+//	}
+//	return c.checkinRequest(tu)
+//}
+
+//import "encoding/hex"
+//
+//// IsDeviceTokenValid checks if s is a hexadecimal token of the correct length.
+//func IsDeviceTokenValid(s string) bool {
+//	// TODO: In 2016, they may be growing up to 100 bytes (200 hexadecimal digits).
+//	if len(s) < 64 || len(s) > 200 {
+//		return false
+//	}
+//	_, err := hex.DecodeString(s)
+//	return err == nil
+//}
+
+
+func (c *MDMClient) TokenUpdate(addl string, udid string) error {
+	pushMagic := strings.ToUpper(uuid.NewString())
+
+	log.Println("TokenUpdate")
+	budid := []byte(udid)
+	ebudid := make([]byte, hex.EncodedLen(len(budid)))
+	hex.Encode(ebudid, budid)
 	tu := &TokenUpdateRequest{
 		MessageType: "TokenUpdate",
-		PushMagic:   "fakePushMagic" + addl,
-		Token:       []byte("fakeToken" + addl),
+		PushMagic:   pushMagic,
+		Token:       ebudid,
 		Topic:       c.MDMPayload.Topic,
 		UDID:        c.Device.UDID,
 	}
+
 	return c.checkinRequest(tu)
 }
 

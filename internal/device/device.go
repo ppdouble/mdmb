@@ -28,12 +28,12 @@ type Device struct {
 func New(name string, db *bolt.DB) *Device {
 	device := &Device{
 		ComputerName: name,
-		Serial:       randSerial(),
+		Serial:       RandSerial(),
 		UDID:         strings.ToUpper(uuid.NewString()),
 		boltDB:       db,
 	}
 	if name == "" {
-		device.ComputerName = device.Serial + "'s Computer"
+		device.ComputerName = device.Serial + "'s Phone"
 	}
 	return device
 }
@@ -41,7 +41,7 @@ func New(name string, db *bolt.DB) *Device {
 // numbers plus capital letters without I, L, O for readability
 const serialLetters = "0123456789ABCDEFGHJKMNPQRSTUVWXYZ"
 
-func randSerial() string {
+func RandSerial() string {
 	b := make([]byte, 12)
 	for i := range b {
 		b[i] = serialLetters[rand.Intn(len(serialLetters))]

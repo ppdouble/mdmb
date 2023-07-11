@@ -252,6 +252,7 @@ func (device *Device) installProfile(pb []byte, fromMDM bool) error {
 	for _, pr := range orderedPayloads {
 		switch pl := pr.Payload.(type) {
 		case *cfgprofiles.SCEPPayload:
+			log.Println("case SCEP Payload")
 			pr.StringResult, err = device.installSCEPPayload(p.PayloadIdentifier, pl)
 			if err != nil {
 				return err
@@ -260,6 +261,7 @@ func (device *Device) installProfile(pb []byte, fromMDM bool) error {
 				return errors.New("no result from scep payload install")
 			}
 		case *cfgprofiles.MDMPayload:
+			log.Println("case MDM Payload")
 			pr.payloadAndResultRef = findpayloadAndResultByUUID(orderedPayloads, pl.IdentityCertificateUUID)
 			if pr.payloadAndResultRef == nil {
 				return fmt.Errorf("could not find payload UUID %s", pl.IdentityCertificateUUID)
@@ -303,21 +305,22 @@ func (device *Device) installWebClipPayload(webClipPayload *cfgprofiles.WebClipP
 }
 
 func (device *Device) installMDMPayload(mdmPayload *cfgprofiles.MDMPayload, profileID string) error {
+	log.Println("installMDMPayload")
 	c, err := newMDMClientUsingPayload(device, mdmPayload)
 	if err != nil {
 		return err
 	}
-	err = c.enroll(profileID)
+	err = c.enroll(profileID, device.UDID)
 	if err != nil {
 		return err
 	}
-
 	device.Save()
 	return nil
 }
 
 // installSCEPPayload ... and returns the keychain identity UUID
 func (device *Device) installSCEPPayload(profileID string, scepPayload *cfgprofiles.SCEPPayload) (string, error) {
+	log.Println("installSCEPPayload")
 	key, err := keyFromSCEPProfilePayload(scepPayload, rand.Reader)
 	if err != nil {
 		return "", err

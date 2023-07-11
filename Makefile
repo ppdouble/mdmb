@@ -7,9 +7,23 @@ MDMB=\
 	mdmb-linux-amd64 \
 	mdmb-windows-amd64.exe
 
-my: mdmb-$(OSARCH)
+MDMBAPNS=\
+	mdmbapns-darwin-amd64 \
+	mdmbapns-linux-amd64 \
+	mdmbapns-windows-amd64.exe
+
+
+#myapns: mdmbapns-$(OSARCH)
+#	$(info $$MDMBAPNS = $(MDMBAPNS))
+
+myb: mdmb-$(OSARCH)
+	$(info $$MDMB = $(MDMB))
 
 $(MDMB): cmd/mdmb
+	GOOS=$(word 2,$(subst -, ,$@)) GOARCH=$(word 3,$(subst -, ,$(subst .exe,,$@))) go build $(LDFLAGS) -o $@ ./$<
+#	$(info $$GOOS = $(GOOS))
+
+$(MDMBAPNS): cmd/mdmbapns
 	GOOS=$(word 2,$(subst -, ,$@)) GOARCH=$(word 3,$(subst -, ,$(subst .exe,,$@))) go build $(LDFLAGS) -o $@ ./$<
 
 %-$(VERSION).zip: %.exe
@@ -22,7 +36,38 @@ $(MDMB): cmd/mdmb
 
 clean:
 	rm -f mdmb-*
+	rm -f mdmbpans-*
 
-release: $(foreach bin,$(MDMB),$(subst .exe,,$(bin))-$(VERSION).zip)
+cleanmdmb:
+	rm -f mdmb-*
 
-.PHONY: my $(MDMB) clean release
+cleanmdmapns:
+	rm -f mdmbapns-*
+
+#release:
+#	$(foreach bin,$(MDMB),$(subst .exe,,$(bin))-$(VERSION).zip)
+#	$(foreach bin,$(MDMBAPNS),$(subst .exe,,$(bin))-$(VERSION).zip)
+
+rmdmb:
+	$(foreach bin,$(MDMB),$(subst .exe,,$(bin))-$(VERSION).zip)
+
+
+rmdmbapns:
+	$(foreach bin,$(MDMBAPNS),$(subst .exe,,$(bin))-$(VERSION).zip)
+	$(info $$MDMBAPNS = $(MDMBAPNS))
+
+mdmbbuild: myb $(MDMB) cleanmdmb rmdmb
+
+mdmapnsbuild: myapns $(MDMBAPNS) cleanmdmapns rmdmbapns
+
+mdmbbld: cleanmdmb myb $(MDMB)
+
+mdmapnsbld: cleanmdmapns myapns $(MDMBAPNS)
+
+build:  mdmapnsbuild mdmbbuild
+
+.PHONY: build
+	#my $(MDMB) clean release
+#	myapns $(MDMBAPNS) clean releaseapns
+
+all: build

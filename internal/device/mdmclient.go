@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"errors"
+	"log"
 
 	"github.com/jessepeterson/cfgprofiles"
 )
@@ -83,7 +84,8 @@ func newMDMClient(device *Device) (*MDMClient, error) {
 	return c, nil
 }
 
-func (c *MDMClient) enroll(profileID string) error {
+func (c *MDMClient) enroll(profileID string, udid string) error {
+	log.Println("call enroll")
 	if c.MDMPayload == nil {
 		return errors.New("no MDM payload")
 	}
@@ -91,12 +93,14 @@ func (c *MDMClient) enroll(profileID string) error {
 		return errors.New("non-SignMessage (mTLS) enrollment not supported")
 	}
 
+	log.Println("call enroll-authenticate")
 	err := c.authenticate()
 	if err != nil {
 		return err
 	}
 
-	err = c.TokenUpdate("")
+	log.Printf("call enroll-TokenUpdate, udid %s\n", udid)
+	err = c.TokenUpdate("", udid)
 	if err != nil {
 		return err
 	}
