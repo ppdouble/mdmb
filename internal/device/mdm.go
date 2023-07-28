@@ -290,18 +290,32 @@ func (c *MDMClient) connect(client *http.Client, connReq interface{}) error {
 	log.Printf("nextConnReq: %s", nextConnReq)
 	if err != nil {
 		log.Println(err)
-		nextConnReq = &ConnectRequest{
-			UDID:        c.Device.UDID,
-			CommandUUID: resp.CommandUUID,
-			RequestType: resp.Command.RequestType,
-			Status:      "Error",
-			ErrorChain: []ErrorChain{
-				{
-					ErrorCode:            99998,
-					ErrorDomain:          "mdmb-handle-mdm-command",
-					LocalizedDescription: "Error handling MDM command",
+
+		if "XML syntax error on line 1: invalid UTF-8" == err.Error() {
+			// do nothing
+			log.Println("XML syntax error on line 1: invalid UTF-8: Give Acknowledged")
+
+			nextConnReq = &ConnectRequest{
+				UDID:        c.Device.UDID,
+				Status:      "Acknowledged",
+				CommandUUID: resp.CommandUUID,
+				RequestType: resp.Command.RequestType,
+			}
+
+		} else {
+			nextConnReq = &ConnectRequest{
+				UDID:        c.Device.UDID,
+				CommandUUID: resp.CommandUUID,
+				RequestType: resp.Command.RequestType,
+				Status:      "Error",
+				ErrorChain: []ErrorChain{
+					{
+						ErrorCode:            99998,
+						ErrorDomain:          "mdmb-handle-mdm-command",
+						LocalizedDescription: "Error handling MDM command",
+					},
 				},
-			},
+			}
 		}
 	}
 
